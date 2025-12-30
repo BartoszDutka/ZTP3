@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification System - Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔔 Notification System</h1>
+            <p class="subtitle">Panel zarządzania powiadomieniami</p>
+        </header>
+
+        <main>
+            <!-- Formularz tworzenia powiadomienia -->
+            <section class="card create-section">
+                <h2>➕ Nowe powiadomienie</h2>
+                <form id="createForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="recipient">Odbiorca *</label>
+                            <input type="text" id="recipient" name="recipient" required 
+                                   placeholder="np. email@example.com lub user123">
+                        </div>
+                        <div class="form-group">
+                            <label for="channel">Kanał *</label>
+                            <select id="channel" name="channel" required>
+                                <option value="Email">📧 Email</option>
+                                <option value="Push">📱 Push</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="content">Treść *</label>
+                        <textarea id="content" name="content" required 
+                                  placeholder="Wpisz treść powiadomienia..." rows="3"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scheduledAt">Data wysyłki *</label>
+                            <input type="datetime-local" id="scheduledAt" name="scheduledAt" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="timeZone">Strefa czasowa</label>
+                            <select id="timeZone" name="timeZone">
+                                <option value="UTC">UTC</option>
+                                <option value="Europe/Warsaw">Europe/Warsaw</option>
+                                <option value="Europe/London">Europe/London</option>
+                                <option value="America/New_York">America/New_York</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="priority">Priorytet</label>
+                            <input type="number" id="priority" name="priority" min="1" max="10" 
+                                   placeholder="1-10">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <span>✅ Utwórz powiadomienie</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Lista powiadomień -->
+            <section class="card notifications-section">
+                <div class="section-header">
+                    <h2>📋 Lista powiadomień</h2>
+                    <button id="refreshBtn" class="btn btn-secondary">🔄 Odśwież</button>
+                </div>
+
+                <!-- Filtry -->
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="filterStatus">Status:</label>
+                        <select id="filterStatus">
+                            <option value="">Wszystkie</option>
+                            <option value="Pending">⏳ Pending</option>
+                            <option value="Scheduled">📅 Scheduled</option>
+                            <option value="Sending">📤 Sending</option>
+                            <option value="Sent">✅ Sent</option>
+                            <option value="Failed">❌ Failed</option>
+                            <option value="Cancelled">🚫 Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterChannel">Kanał:</label>
+                        <select id="filterChannel">
+                            <option value="">Wszystkie</option>
+                            <option value="Email">📧 Email</option>
+                            <option value="Push">📱 Push</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Tabela powiadomień -->
+                <div class="table-container">
+                    <table id="notificationsTable">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Kanał</th>
+                                <th>Odbiorca</th>
+                                <th>Treść</th>
+                                <th>Zaplanowane na</th>
+                                <th>Priorytet</th>
+                                <th>Akcje</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notificationsBody">
+                            <tr>
+                                <td colspan="7" class="loading">Ładowanie...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Statystyki -->
+                <div class="stats" id="stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Wszystkie:</span>
+                        <span class="stat-value" id="statTotal">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Oczekujące:</span>
+                        <span class="stat-value stat-pending" id="statPending">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Wysłane:</span>
+                        <span class="stat-value stat-sent" id="statSent">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Błędne:</span>
+                        <span class="stat-value stat-failed" id="statFailed">0</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal szczegółów -->
+        <div id="detailsModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>📄 Szczegóły powiadomienia</h2>
+                <div id="detailsContent"></div>
+            </div>
+        </div>
+
+        <!-- Toast notifications -->
+        <div id="toastContainer"></div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
