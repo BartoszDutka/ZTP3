@@ -1,5 +1,6 @@
 using MongoDB.Driver;
 using ShoppingCart.Domain.Entities;
+using ShoppingCart.Domain.Exceptions;
 using ShoppingCart.Domain.Interfaces;
 using ShoppingCart.Infrastructure.Persistence;
 
@@ -23,14 +24,28 @@ namespace ShoppingCart.Infrastructure.Repositories
 
         public async Task<Guid> CreateAsync(Cart cart, CancellationToken cancellationToken = default)
         {
+            cart.Version = 0;
             await _context.Carts.InsertOneAsync(cart, cancellationToken: cancellationToken);
             return cart.Id;
         }
 
         public async Task UpdateAsync(Cart cart, CancellationToken cancellationToken = default)
         {
-            var filter = Builders<Cart>.Filter.Eq(c => c.Id, cart.Id);
-            await _context.Carts.ReplaceOneAsync(filter, cart, cancellationToken: cancellationToken);
+            var currentVersion = cart.Version;
+            cart.Version++;
+            cart.UpdatedAt = DateTime.UtcNow;
+
+            var filter = Builders<Cart>.Filter.And(
+                Builders<Cart>.Filter.Eq(c => c.Id, cart.Id),
+                Builders<Cart>.Filter.Eq(c => c.Version, currentVersion)
+            );
+
+            var result = await _context.Carts.ReplaceOneAsync(filter, cart, cancellationToken: cancellationToken);
+
+            if (result.MatchedCount == 0)
+            {
+                throw new ConcurrencyException($"Cart {cart.Id} has been modified by another operation. Please retry.");
+            }
         }
 
         public async Task<List<Cart>> GetInactiveCartsAsync(DateTime inactiveThreshold, CancellationToken cancellationToken = default)

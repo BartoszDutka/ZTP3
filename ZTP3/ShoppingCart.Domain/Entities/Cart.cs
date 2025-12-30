@@ -9,5 +9,6 @@ namespace ShoppingCart.Domain.Entities
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public bool IsCheckedOut { get; set; } = false;
         public DateTime? LastActivityAt { get; set; }
+        public long Version { get; set; } = 0;
     }
 }
