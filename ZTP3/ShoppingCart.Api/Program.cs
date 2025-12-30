@@ -21,6 +21,10 @@ builder.Services.AddSingleton(new ShoppingCartDbContext(connectionString, databa
 builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
+// Register services
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
 // Configure MediatR - scan Application assembly
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<CreateCartCommandHandler>());
 
@@ -29,6 +33,9 @@ builder.Services.AddHttpClient<IProductService, ProductService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["ProductServiceUrl"] ?? "http://localhost:5220");
 });
+
+// Configure HttpClientFactory for NotificationService
+builder.Services.AddHttpClient();
 
 // Add Background Service for cart cleanup
 builder.Services.AddHostedService<CartCleanupService>();

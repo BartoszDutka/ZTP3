@@ -1,6 +1,6 @@
-# Shopping Cart System - Ocena 4.0
+# Shopping Cart System - Ocena 4.5
 
-System koszyka zakupowego zaimplementowany zgodnie z wzorcem CQRS, zasadami czystej architektury oraz **optimistic concurrency control** dla zapewnienia spójności operacyjnej.
+System koszyka zakupowego zaimplementowany zgodnie z wzorcem CQRS, zasadami czystej architektury, **optimistic concurrency control** oraz **integracją z systemem notyfikacji**.
 
 ## Struktura projektu (Clean Architecture)
 
@@ -8,6 +8,8 @@ System koszyka zakupowego zaimplementowany zgodnie z wzorcem CQRS, zasadami czys
 ShoppingCart.Domain/          # Warstwa domenowa - encje, interfejsy
 ├── Entities/                 # Cart (z Version), CartItem, Order, OrderItem
 ├── Interfaces/               # ICartRepository, IOrderRepository, IProductService
+│   ├── IOrderService         # Interface separujący moduły Cart i Order
+│   └── INotificationService  # Interface dla notyfikacji
 ├── Models/                   # Product
 └── Exceptions/               # ConcurrencyException
 
@@ -20,14 +22,16 @@ ShoppingCart.Application/     # Warstwa aplikacji - Use Cases
 ShoppingCart.Infrastructure/  # Warstwa infrastruktury - implementacje
 ├── Persistence/              # ShoppingCartDbContext (MongoDB)
 ├── Repositories/             # CartRepository (z optimistic locking), OrderRepository
-├── Services/                 # ProductService (HTTP client)
+├── Services/                 # ProductService (HTTP), OrderService, NotificationService
+│   ├── OrderService          # Niezależny moduł zamówień
+│   └── NotificationService   # Integracja z Lab2 z retry logic
 └── BackgroundServices/       # CartCleanupService
 
 ShoppingCart.Api/             # Warstwa prezentacji - API
 └── Controllers/              # CartsController (z obsługą ConcurrencyException)
 ```
 
-## Wymagania na 4.0 - ✅ Zrealizowane
+## Wymagania na 4.5 - ✅ Zrealizowane
 
 ### ✅ Wymagania funkcjonalne (3.0)
 - **Tworzenie koszyka** - `CreateCartCommand`
@@ -66,12 +70,33 @@ ShoppingCart.Api/             # Warstwa prezentacji - API
 - **Ochrona przed podwójnym checkout** - `IsCheckedOut` + optimistic locking
 - **Deterministyczna kolejność** - wszystkie operacje z retry zachowują porządek
 
+### ✅ Niezależne moduły Cart i Order (4.5)
+- **IOrderService interface** - jedyny sposób komunikacji Cart → Order
+- **Brak bezpośredniego dostępu** - Cart nie zna OrderRepository
+- **OrderService** - niezależny moduł zarządzający zamówieniami
+- **Możliwość zastąpienia** - implementacja OrderService może być podmieniona
+- **Separacja w CheckoutCartCommandHandler** - używa tylko IOrderService
+
+### ✅ Integracja z systemem notyfikacji Lab2 (4.5)
+- **INotificationService** - interface dla wysyłki notyfikacji
+- **NotificationService** - implementacja z HTTP client
+- **Retry logic** - 3 próby z exponential backoff (1s, 2s, 4s)
+- **Fire-and-forget** - awaria notyfikacji nie blokuje tworzenia zamówienia
+- **Integracja HTTP** - POST do `http://localhost:5000/api/notifications`
+- **Format Lab2** - zgodny z `CreateNotificationRequest` z Lab2
+
+### ✅ Spójność cen produktów (4.5)
+- **Zawsze aktualne ceny** - każde zapytanie pobiera ceny z ProductService
+- **GetCartQuery** - pokazuje aktualne ceny w momencie odczytu
+- **CheckoutCart** - tworzy zamówienie z cenami z momentu checkout
+- **Przewidywalne zachowanie** - cena może się zmienić między dodaniem a checkout
+
 ### ✅ Integracja HTTP z Lab1
 - **ProductService** w Infrastructure
 - Pobiera dane produktów poprzez HTTP z API Lab1
 - Koszyk przechowuje tylko `ProductId` i `Quantity`
 
-## Mechanizmy współbieżności
+## Mechanizmy współbieżności i separacji modułów
 
 ### Optimistic Locking
 ```csharp
@@ -106,6 +131,41 @@ while (retryCount < MaxRetries)
 }
 ```
 
+### Separacja modułów Cart i Order
+```csharp
+// CheckoutCartCommandHandler używa tylko IOrderService
+public CheckoutCartCommandHandler(
+    ICartRepository cartRepository,
+    IOrderService orderService) // Nie ma bezpośredniego dostępu do OrderRepository
+
+// OrderService zarządza całą logiką zamówień
+var orderId = await _orderService.CreateOrderFromCartAsync(
+    cart.Id, cart.UserId, cart.Items, cancellationToken);
+```
+
+### Integracja z notyfikacjami (z retry logic)
+```csharp
+// NotificationService - retry z exponential backoff
+var retryCount = 0;
+while (retryCount < MaxRetries) // 3 próby
+{
+    try
+    {
+        var response = await _httpClient.PostAsJsonAsync(url, request);
+        if (response.IsSuccessStatusCode) return;
+    }
+    catch (Exception ex) { /* log */ }
+    
+    retryCount++;
+    var delayMs = (int)Math.Pow(2, retryCount - 1) * 1000; // 1s, 2s, 4s
+    await Task.Delay(delayMs);
+}
+
+// Fire-and-forget - nie blokuje tworzenia zamówienia
+_ = Task.Run(async () => 
+    await _notificationService.SendOrderCreatedNotificationAsync(...));
+```
+
 ### Ochrona checkout
 - Tylko jeden checkout może się udać (optimistic locking)
 - `IsCheckedOut` ustawiane atomowo z weryfikacją Version
@@ -120,7 +180,10 @@ while (retryCount < MaxRetries)
     "ConnectionString": "mongodb://localhost:27017",
     "DatabaseName": "ShoppingCartDb"
   },
-  "ProductServiceUrl": "http://localhost:5220"
+  "ProductServiceUrl": "http://localhost:5220",
+  "NotificationService": {
+    "ApiUrl": "http://localhost:5000/api/notifications"
+  }
 }
 ```
 
@@ -154,8 +217,12 @@ Usuwa lub zmniejsza ilość produktu w koszyku (z retry)
 
 ### POST /api/v1/carts/{cartId}/checkout
 Zatwierdza koszyk i tworzy zamówienie (z ochroną przed podwójnym checkout)
+- **Tworzy zamówienie** z aktualnymi cenami z ProductService
+- **Wysyła notyfikację** do systemu Lab2
+- **Używa separacji modułów** - CheckoutCart → IOrderService → OrderService
+
 **Odpowiedzi:**
-- `200 OK` - zamówienie utworzone
+- `200 OK` - zamówienie utworzone, notyfikacja wysłana (fire-and-forget)
 - `400 Bad Request` - koszyk pusty lub już zatwierdzony
 - `409 Conflict` - konflikt podczas checkout
 
@@ -167,6 +234,7 @@ Zatwierdza koszyk i tworzy zamówienie (z ochroną przed podwójnym checkout)
 4. **Automatyczne czyszczenie** - usuwa wygasłe pozycje i puste koszyki
 5. **Retry logic** - automatyczne ponowienie przy konfliktach (max 3x)
 6. **Optimistic locking** - wykrywanie i obsługa konfliktów współbieżności
+7. **Notyfikacje z retry** - 3 próby wysyłki z exponential backoff (1s, 2s, 4s)
 
 ## Uruchomienie
 
@@ -174,14 +242,25 @@ Zatwierdza koszyk i tworzy zamówienie (z ochroną przed podwójnym checkout)
 # Uruchom MongoDB
 docker run -d -p 27017:27017 --name mongodb mongo:latest
 
-# Uruchom aplikację
+# Uruchom system notyfikacji Lab2 (opcjonalne)
+cd ZTP2/src/NotificationSystem.Api
+dotnet run
+
+# Uruchom serwis produktowy Lab1
+cd ZTP1/ZTP1/ProductManagementAPI
+dotnet run
+
+# Uruchom aplikację koszyka
+cd ZTP3/ShoppingCart.Api
 cd ZTP3/ShoppingCart.Api
 dotnet run
 ```
 
 Aplikacja uruchomi się na http://localhost:5086
 
-## Scenariusze testowe współbieżności
+**Uwaga:** System notyfikacji (Lab2) jest opcjonalny - zamówienia są tworzone nawet gdy Lab2 nie działa (fire-and-forget).
+
+## Scenariusze testowe
 
 ### Test 1: Równoległe dodawanie produktów
 ```bash
@@ -203,4 +282,40 @@ curl -X POST http://localhost:5086/api/v1/carts/{cartId}/items \
 curl -X POST http://localhost:5086/api/v1/carts/{cartId}/checkout
 ```
 **Oczekiwany rezultat:** Tylko jeden checkout się uda, drugi otrzyma 400 Bad Request lub 409 Conflict
+
+### Test 3: Notyfikacja po checkout
+```bash
+# 1. Utwórz koszyk
+curl -X POST http://localhost:5086/api/v1/carts \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"user@example.com"}'
+
+# 2. Dodaj produkt
+curl -X POST http://localhost:5086/api/v1/carts/{cartId}/items \
+  -H "Content-Type: application/json" \
+  -d '{"productId":"123","quantity":2}'
+
+# 3. Checkout
+curl -X POST http://localhost:5086/api/v1/carts/{cartId}/checkout
+
+# 4. Sprawdź notyfikację w Lab2 (jeśli działa)
+curl http://localhost:5000/api/notifications
+```
+**Oczekiwany rezultat:** Zamówienie utworzone, notyfikacja wysłana do Lab2 (z retry jeśli potrzeba)
+
+### Test 4: Spójność cen
+```bash
+# 1. Dodaj produkt do koszyka (zapamiętana cena: np. 100 PLN)
+# 2. Zmień cenę produktu w Lab1
+# 3. Pobierz koszyk - pokaże AKTUALNĄ cenę z Lab1
+curl -X GET http://localhost:5086/api/v1/carts/{cartId}
+# 4. Checkout - zamówienie z AKTUALNĄ ceną
+curl -X POST http://localhost:5086/api/v1/carts/{cartId}/checkout
+```
+**Oczekiwany rezultat:** Koszyk zawsze pokazuje aktualne ceny, zamówienie tworzone z cenami z momentu checkout
+
+### Test 5: Separacja modułów
+- CheckoutCartCommandHandler używa tylko **IOrderService** (nie OrderRepository)
+- OrderService zarządza utworzeniem Order i wysyłką notyfikacji
+- Możliwość podmiany implementacji OrderService bez zmian w Cart module
 

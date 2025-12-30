@@ -9,18 +9,15 @@ namespace ShoppingCart.Application.Handlers
     public class CheckoutCartCommandHandler : IRequestHandler<CheckoutCartCommand, Guid?>
     {
         private readonly ICartRepository _cartRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly IProductService _productService;
+        private readonly IOrderService _orderService;
         private const int MaxRetries = 3;
 
         public CheckoutCartCommandHandler(
             ICartRepository cartRepository,
-            IOrderRepository orderRepository,
-            IProductService productService)
+            IOrderService orderService)
         {
             _cartRepository = cartRepository;
-            _orderRepository = orderRepository;
-            _productService = productService;
+            _orderService = orderService;
         }
 
         public async Task<Guid?> Handle(CheckoutCartCommand request, CancellationToken cancellationToken)
@@ -38,52 +35,21 @@ namespace ShoppingCart.Application.Handlers
                         return null;
                     }
 
-                    var order = new Order
-                    {
-                        Id = Guid.NewGuid(),
-                        CartId = cart.Id,
-                        UserId = cart.UserId,
-                        CreatedAt = DateTime.UtcNow,
-                        Items = new List<OrderItem>()
-                    };
-
-                    decimal totalAmount = 0;
-
-                    foreach (var item in cart.Items)
-                    {
-                        var product = await _productService.GetProductByIdAsync(item.ProductId);
-                        if (product == null)
-                        {
-                            continue;
-                        }
-
-                        var orderItem = new OrderItem
-                        {
-                            Id = Guid.NewGuid(),
-                            ProductId = item.ProductId,
-                            ProductName = product.Name,
-                            Quantity = item.Quantity,
-                            UnitPrice = product.Price,
-                            TotalPrice = product.Price * item.Quantity
-                        };
-
-                        order.Items.Add(orderItem);
-                        totalAmount += orderItem.TotalPrice;
-                    }
-
-                    order.TotalAmount = totalAmount;
+                    // Create order through OrderService interface (module separation)
+                    var orderId = await _orderService.CreateOrderFromCartAsync(
+                        cart.Id, 
+                        cart.UserId, 
+                        cart.Items, 
+                        cancellationToken);
 
                     // Mark cart as checked out - this prevents double checkout
                     cart.IsCheckedOut = true;
                     cart.UpdatedAt = DateTime.UtcNow;
-
-                    // Save order first
-                    await _orderRepository.CreateAsync(order, cancellationToken);
                     
-                    // Then update cart with optimistic locking - this ensures no double checkout
+                    // Update cart with optimistic locking
                     await _cartRepository.UpdateAsync(cart, cancellationToken);
 
-                    return order.Id;
+                    return orderId;
                 }
                 catch (ConcurrencyException)
                 {

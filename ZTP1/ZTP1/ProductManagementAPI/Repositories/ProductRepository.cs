@@ -94,6 +94,9 @@ namespace ZtpLab1.Repositories
             return count > 0;
         }
 
-
+        public async Task ResetDatabaseAsync()
+        {
+            await _collection.DeleteManyAsync(_ => true);
+        }
     }
 }
