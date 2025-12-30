@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # MongoDB - shared database
+  mongodb:
+    image: mongo:latest
+    container_name: ztp-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ProductDb
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ztp-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # RabbitMQ - message broker for ZTP2
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ztp-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - ztp-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ZTP1 - Product Management API
+  ztp1-api:
+    build:
+      context: ./ZTP1/ZTP1
+      dockerfile: ProductManagementAPI/Dockerfile
+    container_name: ztp1-product-api
+    ports:
+      - "5220:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - MongoDbSettings__ConnectionString=mongodb://mongodb:27017
+      - MongoDbSettings__DatabaseName=ProductDb
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - ztp-network
+    restart: unless-stopped
+
+  # ZTP2 - Notification System API
+  ztp2-api:
+    build:
+      context: ./ZTP2
+      dockerfile: src/NotificationSystem.Api/Dockerfile
+    container_name: ztp2-notification-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ztp-network
+    restart: unless-stopped
+
+  # ZTP2 - Email Worker
+  ztp2-worker-email:
+    build:
+      context: ./ZTP2
+      dockerfile: src/NotificationSystem.Worker.Email/Dockerfile
+    container_name: ztp2-worker-email
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ztp-network
+    restart: unless-stopped
+
+  # ZTP2 - Push Worker
+  ztp2-worker-push:
+    build:
+      context: ./ZTP2
+      dockerfile: src/NotificationSystem.Worker.Push/Dockerfile
+    container_name: ztp2-worker-push
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ztp-network
+    restart: unless-stopped
+
+  # ZTP3 - Shopping Cart API
+  ztp3-api:
+    build:
+      context: ./ZTP3
+      dockerfile: ShoppingCart.Api/Dockerfile
+    container_name: ztp3-shoppingcart-api
+    ports:
+      - "5086:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - MongoDbSettings__ConnectionString=mongodb://mongodb:27017
+      - MongoDbSettings__DatabaseName=ShoppingCartDb
+      - ProductServiceUrl=http://ztp1-api:8080
+      - NotificationService__ApiUrl=http://ztp2-api:8080/api/notifications
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      ztp1-api:
+        condition: service_started
+      ztp2-api:
+        condition: service_started
+    networks:
+      - ztp-network
+    restart: unless-stopped
+
+networks:
+  ztp-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

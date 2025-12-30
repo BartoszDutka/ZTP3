@@ -1,6 +1,46 @@
 @ShoppingCart.Api_HostAddress = http://localhost:5086
+@cartId = 
 
-GET {{ShoppingCart.Api_HostAddress}}/weatherforecast/
+### 1. Create a new cart
+POST {{ShoppingCart.Api_HostAddress}}/api/v1/carts
+Content-Type: application/json
+
+{
+  "userId": "testuser123"
+}
+
+### 2. Get cart details
+GET {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}
 Accept: application/json
+
+### 3. Add product to cart (LaptopAcer from ZTP1)
+POST {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}/items
+Content-Type: application/json
+
+{
+  "productId": "LaptopAcer",
+  "quantity": 2
+}
+
+### 4. Add another product (SmartfonSamsung from ZTP1)
+POST {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}/items
+Content-Type: application/json
+
+{
+  "productId": "SmartfonSamsung",
+  "quantity": 1
+}
+
+### 5. Get updated cart
+GET {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}
+Accept: application/json
+
+### 6. Remove product from cart
+DELETE {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}/items/LaptopAcer?quantity=1
+Accept: application/json
+
+### 7. Checkout cart (creates order and sends notification via ZTP2)
+POST {{ShoppingCart.Api_HostAddress}}/api/v1/carts/{{cartId}}/checkout
+Content-Type: application/json
 
 ###

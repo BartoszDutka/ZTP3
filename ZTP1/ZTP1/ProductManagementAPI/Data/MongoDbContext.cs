@@ -1,3 +1,7 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Conventions;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using ZtpLab1.Models;
 
@@ -12,6 +16,8 @@ namespace ZtpLab1.Data
         private readonly IMongoCollection<Product> _products;
         private readonly IMongoCollection<ForbiddenWord> _forbiddenWords;
         private readonly IMongoCollection<ProductHistory> _productHistory;
+        private static bool _isInitialized = false;
+        private static readonly object _lock = new object();
 
         /// <summary>
         /// Konstruktor inicjalizujący połączenie z MongoDB i konfigurujący kolekcje.
@@ -19,6 +25,19 @@ namespace ZtpLab1.Data
         /// <param name="settings">Ustawienia połączenia z MongoDB</param>
         public MongoDbContext(MongoDbSettings settings)
         {
+            // Configure MongoDB serialization settings once
+            if (!_isInitialized)
+            {
+                lock (_lock)
+                {
+                    if (!_isInitialized)
+                    {
+                        ConfigureMongoDb();
+                        _isInitialized = true;
+                    }
+                }
+            }
+
             var client = new MongoClient(settings.ConnectionString);
             var database = client.GetDatabase(settings.DatabaseName);
             _products = database.GetCollection<Product>(settings.ProductsCollectionName);
@@ -55,6 +74,19 @@ namespace ZtpLab1.Data
                 .Descending(h => h.ChangedAt);
             var historyCompositeIndexModel = new CreateIndexModel<ProductHistory>(historyCompositeIndexKeysDefinition);
             _productHistory.Indexes.CreateOne(historyCompositeIndexModel);
+        }
+
+        private static void ConfigureMongoDb()
+        {
+            // Register Guid serializer with Standard representation
+            try
+            {
+                BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+            }
+            catch (BsonSerializationException)
+            {
+                // Serializer already registered, ignore
+            }
         }
 
         /// <summary>

@@ -24,18 +24,33 @@ namespace ShoppingCart.Infrastructure.BackgroundServices
         {
             _logger.LogInformation("Cart Cleanup Service is starting.");
 
+            // Wait a bit before starting to allow other services to initialize
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     await CleanupInactiveCartsAsync(stoppingToken);
                 }
+                catch (OperationCanceledException)
+                {
+                    // Expected when stopping
+                    break;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error occurred while cleaning up inactive carts.");
                 }
 
-                await Task.Delay(_checkInterval, stoppingToken);
+                try
+                {
+                    await Task.Delay(_checkInterval, stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
 
             _logger.LogInformation("Cart Cleanup Service is stopping.");
