@@ -1,0 +1,50 @@
+using MongoDB.Driver;
+using ShoppingCart.Domain.Entities;
+using ShoppingCart.Domain.Interfaces;
+using ShoppingCart.Infrastructure.Persistence;
+
+namespace ShoppingCart.Infrastructure.Repositories
+{
+    public class CartRepository : ICartRepository
+    {
+        private readonly ShoppingCartDbContext _context;
+
+        public CartRepository(ShoppingCartDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<Cart?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return await _context.Carts
+                .Find(c => c.Id == id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<Guid> CreateAsync(Cart cart, CancellationToken cancellationToken = default)
+        {
+            await _context.Carts.InsertOneAsync(cart, cancellationToken: cancellationToken);
+            return cart.Id;
+        }
+
+        public async Task UpdateAsync(Cart cart, CancellationToken cancellationToken = default)
+        {
+            var filter = Builders<Cart>.Filter.Eq(c => c.Id, cart.Id);
+            await _context.Carts.ReplaceOneAsync(filter, cart, cancellationToken: cancellationToken);
+        }
+
+        public async Task<List<Cart>> GetInactiveCartsAsync(DateTime inactiveThreshold, CancellationToken cancellationToken = default)
+        {
+            return await _context.Carts
+                .Find(c => !c.IsCheckedOut && 
+                           (c.LastActivityAt == null || c.LastActivityAt < inactiveThreshold))
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var filter = Builders<Cart>.Filter.Eq(c => c.Id, id);
+            await _context.Carts.DeleteOneAsync(filter, cancellationToken);
+        }
+    }
+}

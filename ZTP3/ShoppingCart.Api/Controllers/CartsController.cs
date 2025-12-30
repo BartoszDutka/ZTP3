@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using ShoppingCart.Api.Commands;
-using ShoppingCart.Api.Queries;
+using ShoppingCart.Application.Commands;
+using ShoppingCart.Application.Queries;
 
 namespace ShoppingCart.Api.Controllers
 {
