@@ -3,10 +3,6 @@ using ShoppingCart.Domain.Interfaces;
 
 namespace ShoppingCart.Infrastructure.Services
 {
-    /// <summary>
-    /// Order module service - handles all order-related operations.
-    /// Separated from Cart module - communicates through IOrderService interface.
-    /// </summary>
     public class OrderService : IOrderService
     {
         private readonly IOrderRepository _orderRepository;
@@ -40,7 +36,6 @@ namespace ShoppingCart.Infrastructure.Services
 
             decimal totalAmount = 0;
 
-            // Fetch current prices from product service
             foreach (var item in cartItems)
             {
                 var product = await _productService.GetProductByIdAsync(item.ProductId);
@@ -55,7 +50,7 @@ namespace ShoppingCart.Infrastructure.Services
                     ProductId = item.ProductId,
                     ProductName = product.Name,
                     Quantity = item.Quantity,
-                    UnitPrice = product.Price, // Current price from product service
+                    UnitPrice = product.Price,
                     TotalPrice = product.Price * item.Quantity
                 };
 
@@ -65,26 +60,10 @@ namespace ShoppingCart.Infrastructure.Services
 
             order.TotalAmount = totalAmount;
 
-            // Save order to database
             await _orderRepository.CreateAsync(order, cancellationToken);
 
-            // Send notification about order creation (with retry logic in notification service)
-            // Fire and forget - notification failure should not block order creation
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await _notificationService.SendOrderCreatedNotificationAsync(
-                        userId, 
-                        order.Id, 
-                        totalAmount, 
-                        CancellationToken.None);
-                }
-                catch
-                {
-                    // Logged in notification service
-                }
-            }, cancellationToken);
+            Task.Run(() => _notificationService.SendOrderCreatedNotificationAsync(
+                userId, order.Id, totalAmount, CancellationToken.None));
 
             return order.Id;
         }

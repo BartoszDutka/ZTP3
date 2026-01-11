@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "kxYntZ1RgCc=",
+  "dgSpecHash": "+q9hIXV8UNo=",
   "success": true,
-  "projectFilePath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP2\\src\\NotificationSystem.Worker.Email\\NotificationSystem.Worker.Email.csproj",
+  "projectFilePath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP3\\ZTP2\\src\\NotificationSystem.Worker.Email\\NotificationSystem.Worker.Email.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\.nuget\\packages\\microsoft.extensions.configuration\\9.0.5\\microsoft.extensions.configuration.9.0.5.nupkg.sha512",
     "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.1\\microsoft.extensions.configuration.abstractions.10.0.1.nupkg.sha512",

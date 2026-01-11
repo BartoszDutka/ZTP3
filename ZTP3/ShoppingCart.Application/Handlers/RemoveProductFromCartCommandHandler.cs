@@ -17,38 +17,25 @@ namespace ShoppingCart.Application.Handlers
 
         public async Task<bool> Handle(RemoveProductFromCartCommand request, CancellationToken cancellationToken)
         {
-            var retryCount = 0;
-
-            while (retryCount < MaxRetries)
+            for (int attempt = 0; attempt < MaxRetries; attempt++)
             {
                 try
                 {
                     var cart = await _cartRepository.GetByIdAsync(request.CartId, cancellationToken);
-
                     if (cart == null || cart.IsCheckedOut)
-                    {
                         return false;
-                    }
 
                     var item = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
                     if (item == null)
-                    {
                         return false;
-                    }
 
                     if (request.Quantity.HasValue && request.Quantity.Value > 0)
                     {
                         item.Quantity -= request.Quantity.Value;
-
                         if (item.Quantity <= 0)
-                        {
                             cart.Items.Remove(item);
-                        }
                         else
-                        {
-                            // Extend reservation when modifying
                             item.ReservationExpiresAt = DateTime.UtcNow.AddMinutes(15);
-                        }
                     }
                     else
                     {
@@ -63,13 +50,9 @@ namespace ShoppingCart.Application.Handlers
                 }
                 catch (ConcurrencyException)
                 {
-                    retryCount++;
-                    if (retryCount >= MaxRetries)
-                    {
+                    if (attempt >= MaxRetries - 1)
                         throw;
-                    }
-                    // Small delay before retry
-                    await Task.Delay(100 * retryCount, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                 }
             }
 

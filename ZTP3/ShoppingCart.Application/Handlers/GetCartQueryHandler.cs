@@ -21,13 +21,10 @@ namespace ShoppingCart.Application.Handlers
         public async Task<CartDto?> Handle(GetCartQuery request, CancellationToken cancellationToken)
         {
             var cart = await _cartRepository.GetByIdAsync(request.CartId, cancellationToken);
-
             if (cart == null)
-            {
                 return null;
-            }
 
-            var cartDto = new CartDto
+            CartDto result = new CartDto
             {
                 Id = cart.Id,
                 UserId = cart.UserId,
@@ -36,32 +33,27 @@ namespace ShoppingCart.Application.Handlers
                 Items = new List<CartItemDto>()
             };
 
-            decimal totalAmount = 0;
-
+            decimal total = 0;
             foreach (var item in cart.Items)
             {
                 var product = await _productService.GetProductByIdAsync(item.ProductId);
                 if (product == null)
-                {
                     continue;
-                }
 
-                var itemDto = new CartItemDto
+                decimal itemTotal = product.Price * item.Quantity;
+                result.Items.Add(new CartItemDto
                 {
                     ProductId = item.ProductId,
                     ProductName = product.Name,
                     Quantity = item.Quantity,
                     UnitPrice = product.Price,
-                    TotalPrice = product.Price * item.Quantity
-                };
-
-                cartDto.Items.Add(itemDto);
-                totalAmount += itemDto.TotalPrice;
+                    TotalPrice = itemTotal
+                });
+                total += itemTotal;
             }
 
-            cartDto.TotalAmount = totalAmount;
-
-            return cartDto;
+            result.TotalAmount = total;
+            return result;
         }
     }
 }

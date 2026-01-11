@@ -31,28 +31,27 @@ namespace ShoppingCart.Infrastructure.Repositories
 
         public async Task UpdateAsync(Cart cart, CancellationToken cancellationToken = default)
         {
-            var currentVersion = cart.Version;
+            long oldVersion = cart.Version;
             cart.Version++;
             cart.UpdatedAt = DateTime.UtcNow;
 
-            var filter = Builders<Cart>.Filter.And(
+            FilterDefinition<Cart> filter = Builders<Cart>.Filter.And(
                 Builders<Cart>.Filter.Eq(c => c.Id, cart.Id),
-                Builders<Cart>.Filter.Eq(c => c.Version, currentVersion)
+                Builders<Cart>.Filter.Eq(c => c.Version, oldVersion)
             );
 
-            var result = await _context.Carts.ReplaceOneAsync(filter, cart, cancellationToken: cancellationToken);
+            ReplaceOneResult result = await _context.Carts.ReplaceOneAsync(
+                filter, cart, cancellationToken: cancellationToken);
 
             if (result.MatchedCount == 0)
-            {
-                throw new ConcurrencyException($"Cart {cart.Id} has been modified by another operation. Please retry.");
-            }
+                throw new ConcurrencyException($"Cart {cart.Id} was modified. Retry.");
         }
 
-        public async Task<List<Cart>> GetInactiveCartsAsync(DateTime inactiveThreshold, CancellationToken cancellationToken = default)
+        public async Task<List<Cart>> GetInactiveCartsAsync(DateTime threshold, CancellationToken cancellationToken = default)
         {
             return await _context.Carts
                 .Find(c => !c.IsCheckedOut && 
-                           (c.LastActivityAt == null || c.LastActivityAt < inactiveThreshold))
+                           (c.LastActivityAt == null || c.LastActivityAt < threshold))
                 .ToListAsync(cancellationToken);
         }
 

@@ -131,11 +131,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP2\\src\\NotificationSystem.Domain\\NotificationSystem.Domain.csproj",
+      "projectUniqueName": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP3\\ZTP2\\src\\NotificationSystem.Domain\\NotificationSystem.Domain.csproj",
       "projectName": "NotificationSystem.Domain",
-      "projectPath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP2\\src\\NotificationSystem.Domain\\NotificationSystem.Domain.csproj",
+      "projectPath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP3\\ZTP2\\src\\NotificationSystem.Domain\\NotificationSystem.Domain.csproj",
       "packagesPath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP2\\src\\NotificationSystem.Domain\\obj\\",
+      "outputPath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP3\\ZTP2\\src\\NotificationSystem.Domain\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

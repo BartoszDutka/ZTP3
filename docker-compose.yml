@@ -91,6 +91,7 @@ services:
       - RabbitMQ__Port=5672
       - RabbitMQ__Username=guest
       - RabbitMQ__Password=guest
+      - ApiUrl=http://ztp2-api:8080
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -110,6 +111,7 @@ services:
       - RabbitMQ__Port=5672
       - RabbitMQ__Username=guest
       - RabbitMQ__Password=guest
+      - ApiUrl=http://ztp2-api:8080
     depends_on:
       rabbitmq:
         condition: service_healthy

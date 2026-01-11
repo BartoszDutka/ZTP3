@@ -6,10 +6,6 @@ using ShoppingCart.Domain.Interfaces;
 
 namespace ShoppingCart.Infrastructure.Services
 {
-    /// <summary>
-    /// Notification service with retry logic for reliable notification delivery.
-    /// Integrates with Lab2 notification system via HTTP API.
-    /// </summary>
     public class NotificationService : INotificationService
     {
         private readonly HttpClient _httpClient;
@@ -34,14 +30,11 @@ namespace ShoppingCart.Infrastructure.Services
             decimal totalAmount, 
             CancellationToken cancellationToken = default)
         {
-            var retryCount = 0;
-            Exception? lastException = null;
-
-            while (retryCount < MaxRetries)
+            for (int attempt = 1; attempt <= MaxRetries; attempt++)
             {
                 try
                 {
-                    var notificationRequest = new
+                    var request = new
                     {
                         Content = $"Twoje zamówienie {orderId} o wartości {totalAmount:C} zostało przyjęte do realizacji.",
                         Channel = "Email",
@@ -51,51 +44,30 @@ namespace ShoppingCart.Infrastructure.Services
                         Priority = 5
                     };
 
-                    var response = await _httpClient.PostAsJsonAsync(
-                        _notificationApiUrl, 
-                        notificationRequest, 
-                        cancellationToken);
+                    HttpResponseMessage response = await _httpClient.PostAsJsonAsync(
+                        _notificationApiUrl, request, cancellationToken);
 
                     if (response.IsSuccessStatusCode)
                     {
-                        _logger.LogInformation(
-                            "Notification sent successfully for order {OrderId} to user {UserId}", 
-                            orderId, 
-                            userId);
+                        _logger.LogInformation("Notification sent for order {OrderId}", orderId);
                         return;
                     }
 
-                    var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogWarning(
-                        "Notification API returned status {StatusCode}: {Content}", 
-                        response.StatusCode, 
-                        errorContent);
+                    _logger.LogWarning("Notification failed with status {Status}", response.StatusCode);
                 }
                 catch (Exception ex)
                 {
-                    lastException = ex;
-                    _logger.LogWarning(
-                        ex,
-                        "Failed to send notification (attempt {Attempt}/{MaxRetries}) for order {OrderId}", 
-                        retryCount + 1, 
-                        MaxRetries, 
-                        orderId);
+                    _logger.LogWarning(ex, "Failed to send notification (attempt {Attempt})", attempt);
+                    
+                    if (attempt == MaxRetries)
+                    {
+                        _logger.LogError("Giving up on notification for order {OrderId}", orderId);
+                        return;
+                    }
                 }
 
-                retryCount++;
-                if (retryCount < MaxRetries)
-                {
-                    // Exponential backoff: 1s, 2s, 4s
-                    var delayMs = (int)Math.Pow(2, retryCount - 1) * 1000;
-                    await Task.Delay(delayMs, cancellationToken);
-                }
+                await Task.Delay(1000, cancellationToken);
             }
-
-            _logger.LogError(
-                lastException,
-                "Failed to send notification after {MaxRetries} attempts for order {OrderId}", 
-                MaxRetries, 
-                orderId);
         }
     }
 }

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "TOGt5twJSc8=",
+  "dgSpecHash": "a1mJmLjGHBs=",
   "success": true,
-  "projectFilePath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP2\\src\\NotificationSystem.Infrastructure\\NotificationSystem.Infrastructure.csproj",
+  "projectFilePath": "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\Desktop\\ZTP3\\ZTP2\\src\\NotificationSystem.Infrastructure\\NotificationSystem.Infrastructure.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\.nuget\\packages\\dnsclient\\1.6.1\\dnsclient.1.6.1.nupkg.sha512",
     "C:\\Users\\bdutka.DESKTOP-ECBS2TP\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\2.0.0\\microsoft.extensions.logging.abstractions.2.0.0.nupkg.sha512",

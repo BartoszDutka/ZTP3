@@ -22,33 +22,23 @@ namespace ShoppingCart.Application.Handlers
 
         public async Task<bool> Handle(AddProductToCartCommand request, CancellationToken cancellationToken)
         {
-            var retryCount = 0;
-
-            while (retryCount < MaxRetries)
+            for (int attempt = 0; attempt < MaxRetries; attempt++)
             {
                 try
                 {
-                    var cart = await _cartRepository.GetByIdAsync(request.CartId, cancellationToken);
-
+                    Cart cart = await _cartRepository.GetByIdAsync(request.CartId, cancellationToken);
                     if (cart == null || cart.IsCheckedOut)
-                    {
                         return false;
-                    }
 
-                    // Verify product exists
                     var product = await _productService.GetProductByIdAsync(request.ProductId);
                     if (product == null)
-                    {
                         return false;
-                    }
 
-                    var existingItem = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
-
-                    if (existingItem != null)
+                    var item = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
+                    if (item != null)
                     {
-                        existingItem.Quantity += request.Quantity;
-                        // Extend reservation by 15 minutes
-                        existingItem.ReservationExpiresAt = DateTime.UtcNow.AddMinutes(15);
+                        item.Quantity += request.Quantity;
+                        item.ReservationExpiresAt = DateTime.UtcNow.AddMinutes(15);
                     }
                     else
                     {
@@ -58,7 +48,6 @@ namespace ShoppingCart.Application.Handlers
                             ProductId = request.ProductId,
                             Quantity = request.Quantity,
                             AddedAt = DateTime.UtcNow,
-                            // Set 15-minute reservation
                             ReservationExpiresAt = DateTime.UtcNow.AddMinutes(15)
                         });
                     }
@@ -71,13 +60,10 @@ namespace ShoppingCart.Application.Handlers
                 }
                 catch (ConcurrencyException)
                 {
-                    retryCount++;
-                    if (retryCount >= MaxRetries)
-                    {
+                    if (attempt >= MaxRetries - 1)
                         throw;
-                    }
-                    // Small delay before retry
-                    await Task.Delay(100 * retryCount, cancellationToken);
+                    
+                    await Task.Delay(100, cancellationToken);
                 }
             }
 

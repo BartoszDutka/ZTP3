@@ -22,44 +22,31 @@ namespace ShoppingCart.Application.Handlers
 
         public async Task<Guid?> Handle(CheckoutCartCommand request, CancellationToken cancellationToken)
         {
-            var retryCount = 0;
-
-            while (retryCount < MaxRetries)
+            for (int attempt = 0; attempt < MaxRetries; attempt++)
             {
                 try
                 {
                     var cart = await _cartRepository.GetByIdAsync(request.CartId, cancellationToken);
-
                     if (cart == null || cart.IsCheckedOut || !cart.Items.Any())
-                    {
                         return null;
-                    }
 
-                    // Create order through OrderService interface (module separation)
-                    var orderId = await _orderService.CreateOrderFromCartAsync(
+                    Guid orderId = await _orderService.CreateOrderFromCartAsync(
                         cart.Id, 
                         cart.UserId, 
                         cart.Items, 
                         cancellationToken);
 
-                    // Mark cart as checked out - this prevents double checkout
                     cart.IsCheckedOut = true;
                     cart.UpdatedAt = DateTime.UtcNow;
-                    
-                    // Update cart with optimistic locking
                     await _cartRepository.UpdateAsync(cart, cancellationToken);
 
                     return orderId;
                 }
                 catch (ConcurrencyException)
                 {
-                    retryCount++;
-                    if (retryCount >= MaxRetries)
-                    {
+                    if (attempt >= MaxRetries - 1)
                         throw;
-                    }
-                    // Small delay before retry
-                    await Task.Delay(100 * retryCount, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                 }
             }
 

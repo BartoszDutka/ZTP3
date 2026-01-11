@@ -9,8 +9,8 @@ namespace ShoppingCart.Infrastructure.BackgroundServices
     {
         private readonly ILogger<CartCleanupService> _logger;
         private readonly IServiceProvider _serviceProvider;
-        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(5); // Check every 5 minutes
-        private readonly TimeSpan _inactivityThreshold = TimeSpan.FromMinutes(15); // 15 minutes inactivity
+        private const int CheckIntervalMinutes = 5;
+        private const int InactivityMinutes = 15;
 
         public CartCleanupService(
             ILogger<CartCleanupService> logger,
@@ -22,86 +22,66 @@ namespace ShoppingCart.Infrastructure.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("Cart Cleanup Service is starting.");
-
-            // Wait a bit before starting to allow other services to initialize
-            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+            _logger.LogInformation("Cart cleanup started");
+            await Task.Delay(10000, stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await CleanupInactiveCartsAsync(stoppingToken);
+                    await CleanupCarts(stoppingToken);
+                    await Task.Delay(TimeSpan.FromMinutes(CheckIntervalMinutes), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
-                    // Expected when stopping
                     break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error occurred while cleaning up inactive carts.");
-                }
-
-                try
-                {
-                    await Task.Delay(_checkInterval, stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
+                    _logger.LogError(ex, "Cleanup error");
                 }
             }
 
-            _logger.LogInformation("Cart Cleanup Service is stopping.");
+            _logger.LogInformation("Cart cleanup stopped");
         }
 
-        private async Task CleanupInactiveCartsAsync(CancellationToken cancellationToken)
+        private async Task CleanupCarts(CancellationToken token)
         {
             using var scope = _serviceProvider.CreateScope();
-            var cartRepository = scope.ServiceProvider.GetRequiredService<ICartRepository>();
+            ICartRepository repo = scope.ServiceProvider.GetRequiredService<ICartRepository>();
 
-            var inactiveThreshold = DateTime.UtcNow - _inactivityThreshold;
-            var inactiveCarts = await cartRepository.GetInactiveCartsAsync(inactiveThreshold, cancellationToken);
+            DateTime threshold = DateTime.UtcNow.AddMinutes(-InactivityMinutes);
+            List<Cart> carts = await repo.GetInactiveCartsAsync(threshold, token);
 
-            if (inactiveCarts.Any())
+            if (!carts.Any())
+                return;
+
+            _logger.LogInformation("Cleaning {Count} inactive carts", carts.Count);
+
+            foreach (var cart in carts)
             {
-                _logger.LogInformation("Found {Count} inactive carts to clean up.", inactiveCarts.Count);
-
-                foreach (var cart in inactiveCarts)
+                try
                 {
-                    try
-                    {
-                        // Remove items with expired reservations
-                        var itemsToRemove = cart.Items
-                            .Where(i => i.ReservationExpiresAt.HasValue && i.ReservationExpiresAt.Value < DateTime.UtcNow)
-                            .ToList();
+                    DateTime now = DateTime.UtcNow;
+                    var expired = cart.Items.Where(i => i.ReservationExpiresAt < now).ToList();
+                    
+                    foreach (var item in expired)
+                        cart.Items.Remove(item);
 
-                        foreach (var item in itemsToRemove)
-                        {
-                            cart.Items.Remove(item);
-                            _logger.LogDebug("Removed expired item {ProductId} from cart {CartId}",
-                                item.ProductId, cart.Id);
-                        }
-
-                        // If cart has no items after cleanup or hasn't been active, delete it
-                        if (!cart.Items.Any())
-                        {
-                            await cartRepository.DeleteAsync(cart.Id, cancellationToken);
-                            _logger.LogInformation("Deleted inactive cart {CartId}", cart.Id);
-                        }
-                        else
-                        {
-                            // Update cart to reflect removed items
-                            cart.UpdatedAt = DateTime.UtcNow;
-                            await cartRepository.UpdateAsync(cart, cancellationToken);
-                            _logger.LogInformation("Updated cart {CartId} after removing expired items", cart.Id);
-                        }
-                    }
-                    catch (Exception ex)
+                    if (!cart.Items.Any())
                     {
-                        _logger.LogError(ex, "Error cleaning up cart {CartId}", cart.Id);
+                        await repo.DeleteAsync(cart.Id, token);
+                        _logger.LogDebug("Deleted cart {CartId}", cart.Id);
                     }
+                    else
+                    {
+                        cart.UpdatedAt = now;
+                        await repo.UpdateAsync(cart, token);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to cleanup cart {CartId}", cart.Id);
                 }
             }
         }
